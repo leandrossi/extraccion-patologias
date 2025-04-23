@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <title>Extracción de Patologías ROJO</title>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+            padding: 6px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Extracción de Patologías ROJO</h1>
+    <form method="POST" enctype="multipart/form-data" action="/process_pdf">
+        <label for="pdf_file">Subir archivo PDF:</label>
+        <input type="file" id="pdf_file" name="pdf_file" accept="application/pdf" required />
+        <button type="submit">Procesar</button>
+    </form>
+
+    {% if items %}
+    <h2>Resultados</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Número</th>
+                <th>Tipo de Patología</th>
+                <th>Descripción Corta</th>
+                <th>Habitación</th>
+                <th>Página</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.code }}</td>
+                <td>{{ item.type }}</td>
+                <td>{{ item.description }}</td>
+                <td>{{ item.room }}</td>
+                <td>{{ item.page }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <form method="POST" action="/download_csv">
+        <input type="hidden" name="csv_data" value="{{ csv_data }}" />
+        <button type="submit">Descargar CSV</button>
+    </form>
+    {% endif %}
+</div>
+</body>
+</html>
