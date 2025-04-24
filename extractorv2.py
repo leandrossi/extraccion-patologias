@@ -38,7 +38,6 @@ def extract_front_page_info(file_stream):
 
         # Use current date
         date_str = datetime.now().strftime("%Y-%m-%d")
-
         return {
             "address": address,
             "inspector": inspector,
@@ -46,87 +45,156 @@ def extract_front_page_info(file_stream):
         }
 
 def extract_pathologies_from_pdf(file_stream):
-    # Reuse the previous extraction logic from extractor.py or implement here
-    # For now, we can import and call the existing function from extractor.py
-    from extractor import extract_pathologies_from_pdf as old_extract
-    return old_extract(file_stream)
+    """Extract pathologies from PDF using pdfplumber."""
+    pathology_items = []
+    
+    with pdfplumber.open(file_stream) as pdf:
+        # Process each page of the PDF
+        for page_num, page in enumerate(pdf.pages, 1):
+            text = page.extract_text() or ""
+            
+            # Use regex to find pathology entries
+            matches = pattern.finditer(text)
+            
+            for match in matches:
+                code = match.group(1)
+                pathology_type = match.group(2).strip()
+                
+                # Look for description in following lines (simple heuristic)
+                lines = text.split('\n')
+                start_idx = -1
+                
+                # Find the line with the matched text
+                for i, line in enumerate(lines):
+                    if code in line and pathology_type in line:
+                        start_idx = i
+                        break
+                
+                # Extract description from the next line(s)
+                description = ""
+                room = "N/A"
+                
+                if start_idx >= 0 and start_idx + 1 < len(lines):
+                    description = lines[start_idx + 1].strip()
+                    
+                    # Look for room information
+                    for i in range(start_idx, min(start_idx + 5, len(lines))):
+                        line_lower = lines[i].lower()
+                        if "habitación" in line_lower or "baño" in line_lower or "cocina" in line_lower or "living" in line_lower:
+                            room = lines[i].strip()
+                            break
+                
+                # Add the extracted item
+                pathology_items.append({
+                    "code": code,
+                    "type": pathology_type,
+                    "description": description,
+                    "room": room,
+                    "page": page_num
+                })
+    
+    return pathology_items
 
-def generate_front_page_pdf(info):
+def generate_page3_pdf(form_data):
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
 
-    # Add static elements like logo here if needed
+    # Título
+    title = Paragraph("Datos del Informe", styles['Heading1'])
+    elements.append(title)
+    elements.append(Spacer(1, 20))
 
-    # Dynamic text
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(72, height - 72, "Reporte de Inspección de Propiedades")
-    c.setFont("Helvetica", 12)
-    c.drawString(72, height - 100, f"Dirección: {info.get('address', '')}")
-    c.drawString(72, height - 120, f"Fecha: {info.get('date', '')}")
-    c.drawString(72, height - 140, f"Inspector: {info.get('inspector', '')}")
-
-    c.showPage()
-    c.save()
+    # Sección del Inspector
+    elements.append(Paragraph("Información del Inspector", styles['Heading2']))
+    elements.append(Spacer(1, 10))
+    
+    inspector_data = [
+        ["Nombre:", form_data.get("inspector", "")],
+        ["Teléfono:", form_data.get("inspector_phone", "")],
+        ["Email:", form_data.get("inspector_email", "")]
+    ]
+    
+    inspector_table = Table(inspector_data, colWidths=[100, 400])
+    inspector_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+    ]))
+    elements.append(inspector_table)
+    elements.append(Spacer(1, 20))
+    
+    # Sección del Cliente
+    elements.append(Paragraph("Datos del Cliente", styles['Heading2']))
+    elements.append(Spacer(1, 10))
+    
+    client_data = [
+        ["Nombre:", form_data.get("client_name", "")],
+        ["Dirección:", form_data.get("client_address", "")],
+        ["Localidad:", form_data.get("client_locality", "")],
+        ["Provincia:", form_data.get("client_province", "")],
+        ["Código Postal:", form_data.get("client_postalcode", "")],
+        ["Teléfono:", form_data.get("client_phone", "")],
+        ["Email:", form_data.get("client_email", "")],
+        ["CUIT:", form_data.get("client_cuit", "")]
+    ]
+    
+    client_table = Table(client_data, colWidths=[100, 400])
+    client_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+    ]))
+    elements.append(client_table)
+    elements.append(Spacer(1, 20))
+    
+    # Sección del Inmueble
+    elements.append(Paragraph("Datos del Inmueble", styles['Heading2']))
+    elements.append(Spacer(1, 10))
+    
+    property_data = [
+        ["Dirección:", form_data.get("property_address", "")],
+        ["Localidad:", form_data.get("property_locality", "")],
+        ["Provincia:", form_data.get("property_province", "")],
+        ["Cliente presente:", form_data.get("client_present", "No")],
+        ["Abierta por:", form_data.get("property_opened_by", "")],
+        ["Ficha:", form_data.get("property_ficha", "")]
+    ]
+    
+    property_table = Table(property_data, colWidths=[100, 400])
+    property_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+    ]))
+    elements.append(property_table)
+    
+    # Fecha actual al pie de página
+    elements.append(Spacer(1, 40))
+    date_paragraph = Paragraph(f"Fecha del informe: {datetime.now().strftime('%d/%m/%Y')}", styles['Normal'])
+    elements.append(date_paragraph)
+    
+    # Construir el PDF
+    doc.build(elements)
     buffer.seek(0)
     return buffer
 
 def generate_pathology_table_pdf(items):
     buffer = io.BytesIO()
-    
-    # Reduce the left and right margins to make table wider
-    # Default margins are usually around 72 points (1 inch)
-    left_margin = 30
-    right_margin = 30
-    top_margin = 72
-    bottom_margin = 72
-    
-    # Create document with custom margins
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=left_margin,
-        rightMargin=right_margin,
-        topMargin=top_margin,
-        bottomMargin=bottom_margin
-    )
-    
-    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
-
-    title = Paragraph("Tabla de Patologías ROJO", styles['Heading1'])
-    elements.append(title)
-    elements.append(Spacer(1, 12))
-
-    data = [["Número", "Tipo", "Descripción Corta", "Habitación", "Página"]]
+    data = [["Código", "Tipo", "Descripción", "Habitación", "Página"]]
     for item in items:
-        row = [
-            Paragraph(str(item["code"]), styles['BodyText']),
-            Paragraph(item["type"], styles['BodyText']),
-            Paragraph(item["description"], styles['BodyText']),
-            Paragraph(item["room"], styles['BodyText']),
-            Paragraph(item["page"], styles['BodyText'])
-        ]
-        data.append(row)
-
-    # Calculate column widths based on content length
-    col_count = len(data[0])
-    # Use the actual page width minus the reduced margins
-    available_width = letter[0] - left_margin - right_margin
-    min_col_width = 50
-    col_widths = []
-
-    # Define column width proportions (total should equal 1.0)
-    col_proportions = [0.1, 0.15, 0.45, 0.2, 0.1]  # Adjust these as needed
-    
-    for col_idx in range(col_count):
-        # Calculate width based on proportion
-        col_widths.append(max(min_col_width, available_width * col_proportions[col_idx]))
-
-    table = Table(data, colWidths=col_widths, rowHeights=None)
+        data.append([
+            item.get("code", ""),
+            item.get("type", ""),
+            item.get("description", ""),
+            item.get("room", ""),
+            item.get("page", "")
+        ])
+    table = Table(data)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 11),
@@ -150,7 +218,7 @@ def generate_custom_page(info):
     # Fondo de color #233D4C (azul oscuro)
     c.setFillColor(colors.HexColor("#233D4C"))
     c.rect(0, 0, width, height, fill=1, stroke=0)
-    
+
     # Ajustar el gráfico de líneas para que ocupe desde margen izquierdo a derecho
     lineas_image_width = width  # full width, zero margin
     lineas_image_height = 200
@@ -160,41 +228,34 @@ def generate_custom_page(info):
                 lineas_image_width,
                 lineas_image_height,
                 mask='auto')  # Mantener transparencia
-    
+
     # Colocar el logo encima de las líneas y centrado verticalmente
-    logo_width = 200  # Ajustar según el tamaño real de tu logo
-    logo_height = 80
+    logo_width = 400  # Ajustar según el tamaño real de tu logo
+    logo_height = 160
     c.drawImage("images/Logo_check_front.png",
                 (width - logo_width) / 2,  # horizontally centered
                 (height - logo_height) / 2,  # vertically centered
                 logo_width,
                 logo_height,
                 mask='auto')  # Mantener transparencia
-    
+
     # Información centrada en la parte inferior
     c.setFillColor(colors.white)  # Texto en blanco para que resalte sobre el fondo azul
     c.setFont("Helvetica", 10)
     y_position = 100  # Ajustar según necesites
-    
-    # Calcular ancho total para centrar texto
-    address_text = f"Dirección: {info.get('address', 'Formosa 157, CABA, Buenos Aires')}"
-    date_text = f"Fecha: {info.get('date', '22 de Abril de 2025')}"
-    inspector_text = f"Inspector: {info.get('inspector', 'Mendez Mariano Jeremias')}"
-    
-    address_width = c.stringWidth(address_text, "Helvetica", 10)
-    date_width = c.stringWidth(date_text, "Helvetica", 10)
-    inspector_width = c.stringWidth(inspector_text, "Helvetica", 10)
-    
-    c.drawString((width - address_width) / 2, y_position, address_text)
-    c.drawString((width - date_width) / 2, y_position - 15, date_text)
-    c.drawString((width - inspector_width) / 2, y_position - 30, inspector_text)
-    
-    c.showPage()
+
     c.save()
     buffer.seek(0)
     return buffer
 
-def compose_final_report(original_pdf_path, front_page_info, pathology_items, output_path):
+def generate_front_page_pdf(info):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    # Add static elements like logo here if needed
+
+def compose_final_report(original_pdf_path, front_page_info, pathology_items, output_path, form_data=None):
     import os
     # Generate pathology table PDF
     pathology_table_pdf = generate_pathology_table_pdf(pathology_items)
@@ -204,10 +265,15 @@ def compose_final_report(original_pdf_path, front_page_info, pathology_items, ou
     
     # Load additional pages from PDF folder
     page2_path = os.path.join("pdf", "page2.pdf")
-    page3_path = os.path.join("pdf", "page3.pdf")
+    page4_path = os.path.join("pdf", "page4.pdf")
     termspage1_path = os.path.join("pdf", "termspage1.pdf")
     termspage2_path = os.path.join("pdf", "termspage2.pdf")
     lastpage_path = os.path.join("pdf", "lastpage.pdf")
+    
+    # Generate page3 dynamically from form data if provided
+    page3_pdf = None
+    if form_data:
+        page3_pdf = generate_page3_pdf(form_data)
     
     reader_original = PdfReader(original_pdf_path)
     writer = PdfWriter()
@@ -216,8 +282,6 @@ def compose_final_report(original_pdf_path, front_page_info, pathology_items, ou
     custom_reader = PdfReader(custom_page_pdf)
     writer.add_page(custom_reader.pages[0])
     
-    page4_path = os.path.join("pdf", "page4.pdf")  # Added definition for page4_path
-
     # Add page2 from pdf folder
     if os.path.exists(page2_path):
         page2_reader = PdfReader(page2_path)
@@ -230,11 +294,18 @@ def compose_final_report(original_pdf_path, front_page_info, pathology_items, ou
         for page in page4_reader.pages:
             writer.add_page(page)
     
-    # Add page3 from pdf folder
-    if os.path.exists(page3_path):
-        page3_reader = PdfReader(page3_path)
+    # Add dynamically generated page3 or try to load it from pdf folder
+    if page3_pdf:
+        page3_reader = PdfReader(page3_pdf)
         for page in page3_reader.pages:
             writer.add_page(page)
+    else:
+        # Fallback to static file if form_data not provided
+        page3_path = os.path.join("pdf", "page3.pdf")
+        if os.path.exists(page3_path):
+            page3_reader = PdfReader(page3_path)
+            for page in page3_reader.pages:
+                writer.add_page(page)
     
     # Keep original front page as the next page
     if len(reader_original.pages) > 0:

@@ -17,12 +17,82 @@
             margin: auto;
             padding: 20px;
         }
+        fieldset {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        legend {
+            font-weight: bold;
+            padding: 0 10px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"] {
+            width: 100%;
+            padding: 6px;
+            box-sizing: border-box;
+        }
+        .checkbox-label {
+            display: inline-block;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>Extracción de Patologías ROJO</h1>
     <form method="POST" enctype="multipart/form-data" action="/process_pdf">
+        <fieldset>
+            <legend>Inspector</legend>
+            <label for="inspector">Inspector</label>
+            <input type="text" id="inspector" name="inspector" required />
+            <label for="inspector_phone">Tel. Contacto</label>
+            <input type="tel" id="inspector_phone" name="inspector_phone" required />
+            <label for="inspector_email">Mail</label>
+            <input type="email" id="inspector_email" name="inspector_email" required />
+        </fieldset>
+        <fieldset>
+            <legend>Datos cliente</legend>
+            <label for="client_name">Nombre</label>
+            <input type="text" id="client_name" name="client_name" required />
+            <label for="client_address">Dirección</label>
+            <input type="text" id="client_address" name="client_address" required />
+            <label for="client_locality">Localidad</label>
+            <input type="text" id="client_locality" name="client_locality" required />
+            <label for="client_province">Provincia</label>
+            <input type="text" id="client_province" name="client_province" required />
+            <label for="client_postalcode">Código Postal</label>
+            <input type="text" id="client_postalcode" name="client_postalcode" required />
+            <label for="client_phone">Teléfono</label>
+            <input type="tel" id="client_phone" name="client_phone" required />
+            <label for="client_email">Mail</label>
+            <input type="email" id="client_email" name="client_email" required />
+            <label for="client_cuit">CUIT</label>
+            <input type="text" id="client_cuit" name="client_cuit" required />
+        </fieldset>
+        <fieldset>
+            <legend>Datos del inmueble</legend>
+            <label for="property_address">Dirección</label>
+            <input type="text" id="property_address" name="property_address" required />
+            <label for="property_locality">Localidad</label>
+            <input type="text" id="property_locality" name="property_locality" required />
+            <label for="property_province">Provincia</label>
+            <input type="text" id="property_province" name="property_province" required />
+            <label class="checkbox-label" for="client_present">
+                <input type="checkbox" id="client_present" name="client_present" />
+                Cliente presente
+            </label>
+            <label for="property_opened_by">Propiedad abierta por</label>
+            <input type="text" id="property_opened_by" name="property_opened_by" required />
+            <label for="property_ficha">Ficha</label>
+            <input type="text" id="property_ficha" name="property_ficha" required />
+        </fieldset>
         <label for="pdf_file">Subir archivo PDF:</label>
         <input type="file" id="pdf_file" name="pdf_file" accept="application/pdf" required />
         <button type="submit">Procesar</button>
