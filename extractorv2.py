@@ -1,109 +1,265 @@
 import pdfplumber
 import re
+from datetime import datetime
 from collections import defaultdict
+from PyPDF2 import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+import io
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
-# Regex pattern para detectar inicios de patologías ROJO
+# Regex pattern to extract pathology data (same as before)
 pattern = re.compile(
     r"(?m)^\s*(\d{1,3})\s+([A-ZÁÉÍÓÚÜÑ ]+)\s+ROJO(?:\s+Foto)?",
     re.MULTILINE
 )
 
-def extract_pathologies_from_pdf(file_stream):
-    pathology_dict = defaultdict(lambda: {"pages": [], "type": "", "description": "", "room": ""})
-
-    full_text = ""
-    page_positions = []
-    page_texts = []
-
+def extract_front_page_info(file_stream):
     with pdfplumber.open(file_stream) as pdf:
-        for i, page in enumerate(pdf.pages):
-            text = page.extract_text()
-            if text:
-                marker = f"\n<<PAGE {i+1}>>\n"
-                page_positions.append((len(full_text), i + 1))
-                full_text += marker + text
-                page_texts.append((i + 1, text))
+        first_page = pdf.pages[0]
+        text = first_page.extract_text() or ""
 
-    matches = list(pattern.finditer(full_text))
+        # Extract address (heuristic: look for lines with address-like content)
+        address = ""
+        inspector = ""
 
-    for i, match in enumerate(matches):
-        code = match.group(1).strip()
-        type_path = match.group(2).strip()
-
-        start_pos = match.end()
-        end_pos = matches[i+1].start() if i + 1 < len(matches) else len(full_text)
-        block_text = full_text[start_pos:end_pos].strip()
-
-        match_start = match.start()
-        page_number = next((p for pos, p in reversed(page_positions) if match_start >= pos), "?")
-
-        # Verificar si se repite el código y tipo en la siguiente página y usar solo ese contenido si existe
-        if i + 1 < len(matches):
-            next_code = matches[i + 1].group(1).strip()
-            next_type = matches[i + 1].group(2).strip()
-            if next_code == code and next_type == type_path:
-                start_pos = matches[i + 1].end()
-                end_pos = matches[i + 2].start() if i + 2 < len(matches) else len(full_text)
-                block_text = full_text[start_pos:end_pos].strip()
-
-        description_lines = []
-        room = ""
-        lines = block_text.splitlines()
-
-        for line in lines:
-            line_strip = line.strip()
-            if not line_strip or line_strip.lower() == "foto":
-                continue
-            if "-Identificación" in line_strip:
-                break
-            if re.match(r"^(Page\s+\d+/\d+|<<PAGE \d+>>)", line_strip):
-                break
-            description_lines.append(line_strip)
-            if len(description_lines) >= 3:
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            line_lower = line.lower()
+            if "formosa" in line_lower or "buenos aires" in line_lower or "ciudad autónoma" in line_lower:
+                address = line.strip()
+            if "inspector" in line_lower or "firmado por" in line_lower:
+                # Next line likely contains inspector name
+                if i + 1 < len(lines):
+                    inspector = lines[i + 1].strip()
                 break
 
-        description = " ".join(description_lines).strip()
+        # Use current date
+        date_str = datetime.now().strftime("%Y-%m-%d")
 
-        type_phrase = type_path.lower()
-        if description.lower().startswith(type_phrase):
-            description = description[len(type_phrase):].strip()
-        if description.lower().startswith("rojo"):
-            description = description[4:].strip()
+        return {
+            "address": address,
+            "inspector": inspector,
+            "date": date_str
+        }
 
-        # Eliminar prefijos erróneos como "s " y caracteres no alfabéticos antes del texto real
-        description = re.sub(r"^[^a-zA-Z]*(?:s\s+)?", "", description)
+def extract_pathologies_from_pdf(file_stream):
+    # Reuse the previous extraction logic from extractor.py or implement here
+    # For now, we can import and call the existing function from extractor.py
+    from extractor import extract_pathologies_from_pdf as old_extract
+    return old_extract(file_stream)
 
-        # Nuevo enfoque: buscar habitación antes del match dentro del texto de la misma página
-        if not room:
-            page_text = next((text for pg, text in page_texts if str(pg) == str(page_number)), "")
-            room_pattern = re.compile(r"[A-ZÁÉÍÓÚÜÑa-z ]+/?\d+\u00ba? piso", re.IGNORECASE)
-            match_header = f"{code} {type_path} ROJO"
-            lines_page = page_text.splitlines()
-            match_line_idx = next((idx for idx, l in enumerate(lines_page) if match_header in l), None)
-            if match_line_idx is not None:
-                for prev_line in reversed(lines_page[:match_line_idx]):
-                    if room_pattern.search(prev_line):
-                        room = prev_line.strip()
-                        break
+def generate_front_page_pdf(info):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
 
-        if code in pathology_dict:
-            if page_number not in pathology_dict[code]["pages"]:
-                pathology_dict[code]["pages"].append(page_number)
-        else:
-            pathology_dict[code]["type"] = type_path
-            pathology_dict[code]["description"] = description
-            pathology_dict[code]["room"] = room
-            pathology_dict[code]["pages"] = [page_number]
+    # Add static elements like logo here if needed
 
-    items = []
-    for code, info in pathology_dict.items():
-        items.append({
-            "code": code,
-            "type": info["type"],
-            "description": info["description"],
-            "room": info["room"],
-            "page": ", ".join(map(str, info["pages"]))
-        })
+    # Dynamic text
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(72, height - 72, "Reporte de Inspección de Propiedades")
+    c.setFont("Helvetica", 12)
+    c.drawString(72, height - 100, f"Dirección: {info.get('address', '')}")
+    c.drawString(72, height - 120, f"Fecha: {info.get('date', '')}")
+    c.drawString(72, height - 140, f"Inspector: {info.get('inspector', '')}")
 
-    items.sort(key=lambda x: int(x["code"]))
-    return items
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+def generate_pathology_table_pdf(items):
+    buffer = io.BytesIO()
+    
+    # Reduce the left and right margins to make table wider
+    # Default margins are usually around 72 points (1 inch)
+    left_margin = 30
+    right_margin = 30
+    top_margin = 72
+    bottom_margin = 72
+    
+    # Create document with custom margins
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=left_margin,
+        rightMargin=right_margin,
+        topMargin=top_margin,
+        bottomMargin=bottom_margin
+    )
+    
+    styles = getSampleStyleSheet()
+    elements = []
+
+    title = Paragraph("Tabla de Patologías ROJO", styles['Heading1'])
+    elements.append(title)
+    elements.append(Spacer(1, 12))
+
+    data = [["Número", "Tipo", "Descripción Corta", "Habitación", "Página"]]
+    for item in items:
+        row = [
+            Paragraph(str(item["code"]), styles['BodyText']),
+            Paragraph(item["type"], styles['BodyText']),
+            Paragraph(item["description"], styles['BodyText']),
+            Paragraph(item["room"], styles['BodyText']),
+            Paragraph(item["page"], styles['BodyText'])
+        ]
+        data.append(row)
+
+    # Calculate column widths based on content length
+    col_count = len(data[0])
+    # Use the actual page width minus the reduced margins
+    available_width = letter[0] - left_margin - right_margin
+    min_col_width = 50
+    col_widths = []
+
+    # Define column width proportions (total should equal 1.0)
+    col_proportions = [0.1, 0.15, 0.45, 0.2, 0.1]  # Adjust these as needed
+    
+    for col_idx in range(col_count):
+        # Calculate width based on proportion
+        col_widths.append(max(min_col_width, available_width * col_proportions[col_idx]))
+
+    table = Table(data, colWidths=col_widths, rowHeights=None)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+def generate_custom_page(info):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    
+    # Fondo de color #233D4C (azul oscuro)
+    c.setFillColor(colors.HexColor("#233D4C"))
+    c.rect(0, 0, width, height, fill=1, stroke=0)
+    
+    # Ajustar el gráfico de líneas para que ocupe desde margen izquierdo a derecho
+    lineas_image_width = width  # full width, zero margin
+    lineas_image_height = 200
+    c.drawImage("images/lineas_check_front.png",
+                0,  # left edge
+                (height - lineas_image_height) / 2,  # vertically centered
+                lineas_image_width,
+                lineas_image_height,
+                mask='auto')  # Mantener transparencia
+    
+    # Colocar el logo encima de las líneas y centrado verticalmente
+    logo_width = 200  # Ajustar según el tamaño real de tu logo
+    logo_height = 80
+    c.drawImage("images/Logo_check_front.png",
+                (width - logo_width) / 2,  # horizontally centered
+                (height - logo_height) / 2,  # vertically centered
+                logo_width,
+                logo_height,
+                mask='auto')  # Mantener transparencia
+    
+    # Información centrada en la parte inferior
+    c.setFillColor(colors.white)  # Texto en blanco para que resalte sobre el fondo azul
+    c.setFont("Helvetica", 10)
+    y_position = 100  # Ajustar según necesites
+    
+    # Calcular ancho total para centrar texto
+    address_text = f"Dirección: {info.get('address', 'Formosa 157, CABA, Buenos Aires')}"
+    date_text = f"Fecha: {info.get('date', '22 de Abril de 2025')}"
+    inspector_text = f"Inspector: {info.get('inspector', 'Mendez Mariano Jeremias')}"
+    
+    address_width = c.stringWidth(address_text, "Helvetica", 10)
+    date_width = c.stringWidth(date_text, "Helvetica", 10)
+    inspector_width = c.stringWidth(inspector_text, "Helvetica", 10)
+    
+    c.drawString((width - address_width) / 2, y_position, address_text)
+    c.drawString((width - date_width) / 2, y_position - 15, date_text)
+    c.drawString((width - inspector_width) / 2, y_position - 30, inspector_text)
+    
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+def compose_final_report(original_pdf_path, front_page_info, pathology_items, output_path):
+    import os
+    # Generate pathology table PDF
+    pathology_table_pdf = generate_pathology_table_pdf(pathology_items)
+    
+    # Generate the custom page with background color and images
+    custom_page_pdf = generate_custom_page(front_page_info)
+    
+    # Load additional pages from PDF folder
+    page2_path = os.path.join("pdf", "page2.pdf")
+    page3_path = os.path.join("pdf", "page3.pdf")
+    termspage1_path = os.path.join("pdf", "termspage1.pdf")
+    termspage2_path = os.path.join("pdf", "termspage2.pdf")
+    lastpage_path = os.path.join("pdf", "lastpage.pdf")
+    
+    reader_original = PdfReader(original_pdf_path)
+    writer = PdfWriter()
+
+    # Add our custom page as the first page
+    custom_reader = PdfReader(custom_page_pdf)
+    writer.add_page(custom_reader.pages[0])
+    
+    page4_path = os.path.join("pdf", "page4.pdf")  # Added definition for page4_path
+
+    # Add page2 from pdf folder
+    if os.path.exists(page2_path):
+        page2_reader = PdfReader(page2_path)
+        for page in page2_reader.pages:
+            writer.add_page(page)
+    
+    # Add page4 from pdf folder (added as per user request)
+    if os.path.exists(page4_path):
+        page4_reader = PdfReader(page4_path)
+        for page in page4_reader.pages:
+            writer.add_page(page)
+    
+    # Add page3 from pdf folder
+    if os.path.exists(page3_path):
+        page3_reader = PdfReader(page3_path)
+        for page in page3_reader.pages:
+            writer.add_page(page)
+    
+    # Keep original front page as the next page
+    if len(reader_original.pages) > 0:
+        writer.add_page(reader_original.pages[0])
+
+    # Add index page
+    if len(reader_original.pages) > 1:
+        writer.add_page(reader_original.pages[1])
+
+    # Add pathology table pages
+    pathology_reader = PdfReader(pathology_table_pdf)
+    for page in pathology_reader.pages:
+        writer.add_page(page)
+
+    # Add remaining pages from original report starting from page 3
+    for i in range(2, len(reader_original.pages)):
+        writer.add_page(reader_original.pages[i])
+
+    # Add terms pages in order
+    for path in [termspage1_path, termspage2_path, lastpage_path]:
+        if os.path.exists(path):
+            term_reader = PdfReader(path)
+            for page in term_reader.pages:
+                writer.add_page(page)
+
+    # Save final composed PDF
+    with open(output_path, "wb") as f_out:
+        writer.write(f_out)
