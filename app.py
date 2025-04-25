@@ -75,7 +75,11 @@ def process_pdf():
         temp_input.write(file.read())
         temp_input_path = temp_input.name
 
-    compose_final_report(temp_input_path, front_page_info, pathology_items, temp_output.name, form_data)
+    from pdf_summary import get_pdf_summary, generate_summary_page
+    summary_text = get_pdf_summary(temp_input_path)
+    summary_pdf = generate_summary_page(summary_text)
+
+    compose_final_report(temp_input_path, front_page_info, pathology_items, temp_output.name, form_data, summary_pdf=summary_pdf)
 
     # Read the generated PDF to send as response
     with open(temp_output.name, "rb") as f:

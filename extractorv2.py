@@ -218,7 +218,7 @@ def generate_front_page_pdf(info):
     buffer.seek(0)
     return buffer
 
-def compose_final_report(original_pdf_path, front_page_info, pathology_items, output_path, form_data=None):
+def compose_final_report(original_pdf_path, front_page_info, pathology_items, output_path, form_data=None, summary_pdf=None):
     # Generate pathology table PDF
     pathology_table_pdf = generate_pathology_table_pdf(pathology_items)
     
@@ -277,6 +277,12 @@ def compose_final_report(original_pdf_path, front_page_info, pathology_items, ou
     if len(reader_original.pages) > 1:
         writer.add_page(reader_original.pages[1])
 
+    # Add summary page before pathology table pages if generated
+    if summary_pdf is not None:
+        summary_reader = PdfReader(summary_pdf)
+        for page in summary_reader.pages:
+            writer.add_page(page)
+        
     # Add pathology table pages
     pathology_reader = PdfReader(pathology_table_pdf)
     for page in pathology_reader.pages:
