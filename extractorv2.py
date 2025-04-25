@@ -9,8 +9,12 @@ import io
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
+import os
 
-# Regex pattern to extract pathology data (same as before)
+# Importar la función de extractor_pathologies.py
+from extractor_pathologies import extract_pathologies_from_pdf
+
+# Regex pattern para referencias internas
 pattern = re.compile(
     r"(?m)^\s*(\d{1,3})\s+([A-ZÁÉÍÓÚÜÑ ]+)\s+ROJO(?:\s+Foto)?",
     re.MULTILINE
@@ -43,57 +47,6 @@ def extract_front_page_info(file_stream):
             "inspector": inspector,
             "date": date_str
         }
-
-def extract_pathologies_from_pdf(file_stream):
-    """Extract pathologies from PDF using pdfplumber."""
-    pathology_items = []
-    
-    with pdfplumber.open(file_stream) as pdf:
-        # Process each page of the PDF
-        for page_num, page in enumerate(pdf.pages, 1):
-            text = page.extract_text() or ""
-            
-            # Use regex to find pathology entries
-            matches = pattern.finditer(text)
-            
-            for match in matches:
-                code = match.group(1)
-                pathology_type = match.group(2).strip()
-                
-                # Look for description in following lines (simple heuristic)
-                lines = text.split('\n')
-                start_idx = -1
-                
-                # Find the line with the matched text
-                for i, line in enumerate(lines):
-                    if code in line and pathology_type in line:
-                        start_idx = i
-                        break
-                
-                # Extract description from the next line(s)
-                description = ""
-                room = "N/A"
-                
-                if start_idx >= 0 and start_idx + 1 < len(lines):
-                    description = lines[start_idx + 1].strip()
-                    
-                    # Look for room information
-                    for i in range(start_idx, min(start_idx + 5, len(lines))):
-                        line_lower = lines[i].lower()
-                        if "habitación" in line_lower or "baño" in line_lower or "cocina" in line_lower or "living" in line_lower:
-                            room = lines[i].strip()
-                            break
-                
-                # Add the extracted item
-                pathology_items.append({
-                    "code": code,
-                    "type": pathology_type,
-                    "description": description,
-                    "room": room,
-                    "page": page_num
-                })
-    
-    return pathology_items
 
 def generate_page3_pdf(form_data):
     buffer = io.BytesIO()
@@ -184,6 +137,13 @@ def generate_pathology_table_pdf(items):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
+    
+    # Añadir título a la tabla
+    styles = getSampleStyleSheet()
+    title = Paragraph("Tabla de Patologías", styles['Heading1'])
+    elements.append(title)
+    elements.append(Spacer(1, 20))
+    
     data = [["Código", "Tipo", "Descripción", "Habitación", "Página"]]
     for item in items:
         data.append([
@@ -254,9 +214,11 @@ def generate_front_page_pdf(info):
     width, height = letter
 
     # Add static elements like logo here if needed
+    c.save()
+    buffer.seek(0)
+    return buffer
 
 def compose_final_report(original_pdf_path, front_page_info, pathology_items, output_path, form_data=None):
-    import os
     # Generate pathology table PDF
     pathology_table_pdf = generate_pathology_table_pdf(pathology_items)
     
