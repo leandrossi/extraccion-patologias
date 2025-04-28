@@ -48,90 +48,10 @@ def extract_front_page_info(file_stream):
             "date": date_str
         }
 
-def generate_page3_pdf(form_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
-    elements = []
+from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import inch
 
-    # Título
-    title = Paragraph("Datos del Informe", styles['Heading1'])
-    elements.append(title)
-    elements.append(Spacer(1, 20))
-
-    # Sección del Inspector
-    elements.append(Paragraph("Información del Inspector", styles['Heading2']))
-    elements.append(Spacer(1, 10))
-    
-    inspector_data = [
-        ["Nombre:", form_data.get("inspector", "")],
-        ["Teléfono:", form_data.get("inspector_phone", "")],
-        ["Email:", form_data.get("inspector_email", "")]
-    ]
-    
-    inspector_table = Table(inspector_data, colWidths=[100, 400])
-    inspector_table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-    ]))
-    elements.append(inspector_table)
-    elements.append(Spacer(1, 20))
-    
-    # Sección del Cliente
-    elements.append(Paragraph("Datos del Cliente", styles['Heading2']))
-    elements.append(Spacer(1, 10))
-    
-    client_data = [
-        ["Nombre:", form_data.get("client_name", "")],
-        ["Dirección:", form_data.get("client_address", "")],
-        ["Localidad:", form_data.get("client_locality", "")],
-        ["Provincia:", form_data.get("client_province", "")],
-        ["Código Postal:", form_data.get("client_postalcode", "")],
-        ["Teléfono:", form_data.get("client_phone", "")],
-        ["Email:", form_data.get("client_email", "")],
-        ["CUIT:", form_data.get("client_cuit", "")]
-    ]
-    
-    client_table = Table(client_data, colWidths=[100, 400])
-    client_table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-    ]))
-    elements.append(client_table)
-    elements.append(Spacer(1, 20))
-    
-    # Sección del Inmueble
-    elements.append(Paragraph("Datos del Inmueble", styles['Heading2']))
-    elements.append(Spacer(1, 10))
-    
-    property_data = [
-        ["Dirección:", form_data.get("property_address", "")],
-        ["Localidad:", form_data.get("property_locality", "")],
-        ["Provincia:", form_data.get("property_province", "")],
-        ["Cliente presente:", form_data.get("client_present", "No")],
-        ["Abierta por:", form_data.get("property_opened_by", "")],
-        ["Ficha:", form_data.get("property_ficha", "")]
-    ]
-    
-    property_table = Table(property_data, colWidths=[100, 400])
-    property_table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-    ]))
-    elements.append(property_table)
-    
-    # Fecha actual al pie de página
-    elements.append(Spacer(1, 40))
-    date_paragraph = Paragraph(f"Fecha del informe: {datetime.now().strftime('%d/%m/%Y')}", styles['Normal'])
-    elements.append(date_paragraph)
-    
-    # Construir el PDF
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
+from pdf_page3_generator import generate_page3_pdf
 
 def generate_pathology_table_pdf(items):
     buffer = io.BytesIO()
